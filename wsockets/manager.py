@@ -1,13 +1,21 @@
+import os
+import hmac
 import uuid
+from dotenv import load_dotenv
 from fastapi import WebSocket
 from typing import Dict, Optional
+
+load_dotenv()
 
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, dict] = {}
 
     def validate_token(self, token: str) -> bool:
-        return token == "MY_SECRET_TOKEN565" #Placeholder
+        expected = os.getenv("WS_AUTH_TOKEN")
+        if not expected or not token:
+            return False
+        return hmac.compare_digest(token, expected)
 
     async def connect(self, websocket: WebSocket) -> str:
         await websocket.accept()

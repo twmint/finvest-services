@@ -3,12 +3,12 @@ import re
 import asyncio
 import traceback
 from enum import StrEnum
-from yahooquery import Ticker, Screener, get_market_summary
+from yahooquery import Ticker, Screener
 from .manager import ConnectionManager
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from scrapers.base import Scraper
-from constants import NEWS_PUBLISHERS
+from constants import NEWS_PUBLISHERS, WATCHLIST_TICKERS
 
 class ConnectionStatus(StrEnum):
   CONNECTING = 'connecting',
@@ -34,7 +34,6 @@ class StockMessageTypes(StrEnum):
 interval = 5 #seconds
 router = APIRouter()
 manager = ConnectionManager()
-tickers = ["A", "AL", "AAP", "AAPL", "GOOGL", "ZBRA", "ZION", "ZTS"] #Placeholder, to get from db
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
@@ -43,23 +42,18 @@ async def market_stream(
     websocket: WebSocket,
 ):
     client_id = await manager.connect(websocket)
-    print(f"Client {client_id} connected")
     try:
         await manager.send_json({
             "connection_status": ConnectionStatus.CONNECTED,
             "client_id": client_id,
             "authenticated": False
         }, client_id)
-        print(f"Sent connection_established to {client_id}")
-        print(f"Waiting for auth message from {client_id}...")
+
         initial_message = await websocket.receive_json()
-        print(f"Received message from {client_id}:", initial_message)
 
         if initial_message.get("event") == MessageEvents.AUTH:
-            token = initial_message.get("token") #To implement proper token handling
-            print(f"Token received: {token}")
+            token = initial_message.get("token")
             is_valid = manager.validate_token(token)
-            print(f"Token validation result: {is_valid}")
             client = manager.get_client(client_id)
             if client is not None:
                 client["token"] = token if is_valid else None
@@ -71,22 +65,18 @@ async def market_stream(
             }, client_id)
 
             if not is_valid:
-                print(f"Authentication failed for {client_id}")
                 await websocket.close(code=401, reason="Authentication failed")
                 return
 
-            print(f"Authentication successful for {client_id}")
             data_types: list[str] = initial_message.get("subscribe", [item.value for item in StockMessageTypes])
-            print(f"Subscribed to data types: {data_types}")
         else:
             await websocket.close(code=4001, reason="Authentication required")
             return
-        
+
         while True:
             try:
                 message = await asyncio.wait_for(websocket.receive_json(), timeout=1)
                 if message.get("event") == MessageEvents.PING:
-                    print(f"Ping received from {client_id}: {message}")
                     await manager.ping(websocket)
             except asyncio.TimeoutError:
                 pass  # No message received within timeout, continue to send data
@@ -120,42 +110,45 @@ async def market_stream(
         print(f"Error for client {client_id}: {e}")
         traceback.print_exc()
 
-def GetMarketSummary():
-    #print(get_market_summary())
-    pass
-
 def GetFavourites() -> dict[str, dict]:
-    ticker_info = {}
-    all_symbols = " ".join(tickers)
-    myInfo = Ticker(all_symbols, asynchronous=True, progress=True)
-    myDict = myInfo.price
+    try:
+        ticker_info = {}
+        all_symbols = " ".join(WATCHLIST_TICKERS)
+        myInfo = Ticker(all_symbols, asynchronous=True, progress=True)
+        myDict = myInfo.price
 
-    for ticker in tickers:
-        ticker = str(ticker)
-        price = myDict[ticker]['regularMarketPrice']
-        market_cap = myDict[ticker]['marketCap']
-        ticker_info[ticker] = {
-            "price": price,
-            "marketCap": market_cap
-        }
-    return ticker_info
+        for ticker in WATCHLIST_TICKERS:
+            ticker = str(ticker)
+            info = myDict.get(ticker, {})
+            ticker_info[ticker] = {
+                "price": info.get('regularMarketPrice'),
+                "marketCap": info.get('marketCap')
+            }
+        return ticker_info
+    except Exception as e:
+        print(f"Error fetching favourites: {e}")
+        return {}
 
 def GetMarketMovers() -> dict[str, list[dict]]:
-    s = Screener()
-    data = s.get_screeners(["day_gainers", "day_losers", "most_actives"], 5)
-    response = {
-        "gainers": normalize_quotes(
-            data["day_gainers"]["quotes"]
-        ),
-        "losers": normalize_quotes(
-            data["day_losers"]["quotes"]
-        ),
-        "actives": normalize_quotes(
-            data["most_actives"]["quotes"],
-            include_volume=True
-        )
-    }
-    return response
+    try:
+        s = Screener()
+        data = s.get_screeners(["day_gainers", "day_losers", "most_actives"], 5)
+        response = {
+            "gainers": normalize_quotes(
+                data.get("day_gainers", {}).get("quotes", [])
+            ),
+            "losers": normalize_quotes(
+                data.get("day_losers", {}).get("quotes", [])
+            ),
+            "actives": normalize_quotes(
+                data.get("most_actives", {}).get("quotes", []),
+                include_volume=True
+            )
+        }
+        return response
+    except Exception as e:
+        print(f"Error fetching market movers: {e}")
+        return {}
 
 def GetIndices(regions: list[str]) -> dict[str, dict]:
     data = {}
@@ -171,6 +164,8 @@ def GetIndices(regions: list[str]) -> dict[str, dict]:
         if region_section:
             region_data = {}
             table = region_section.find_next("table")
+            if not table:
+                continue
             for row in table.find_all("tr")[1:]:
                 columns = row.find_all("td")
                 if len(columns) >= 3:
@@ -199,7 +194,11 @@ def GetNews() -> dict[str, dict]:
     if soup is None:
         return data
     featured = soup.find("section", {"class": "topic-featured"})
+    if not featured:
+        return data
     news_list = featured.find("div", {"class": "story-list"})
+    if not news_list:
+        return data
     now = int(datetime.now(timezone.utc).timestamp())
     yesterday = int((datetime.now(timezone.utc) - timedelta(days=1)).timestamp())
     for idx, news in enumerate(news_list, start=1):

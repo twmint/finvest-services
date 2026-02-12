@@ -1,3 +1,4 @@
+WATCHLIST_TICKERS = ["A", "AL", "AAP", "AAPL", "GOOGL", "ZBRA", "ZION", "ZTS"]
 
 NEWS_PUBLISHERS = [
     "Reuters",

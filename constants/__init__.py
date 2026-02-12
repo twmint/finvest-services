@@ -1,2 +1,2 @@
-from .dummy_data import NEWS_PUBLISHERS
-_all__ = ["NEWS_PUBLISHERS"]
+from .dummy_data import NEWS_PUBLISHERS, WATCHLIST_TICKERS
+__all__ = ["NEWS_PUBLISHERS", "WATCHLIST_TICKERS"]
