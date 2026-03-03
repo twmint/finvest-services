@@ -133,19 +133,11 @@ def GetMarketMovers() -> dict[str, list[dict]]:
     try:
         s = Screener()
         data = s.get_screeners(["day_gainers", "day_losers", "most_actives"], 5)
-        response = {
-            "gainers": normalize_quotes(
-                data.get("day_gainers", {}).get("quotes", [])
-            ),
-            "losers": normalize_quotes(
-                data.get("day_losers", {}).get("quotes", [])
-            ),
-            "actives": normalize_quotes(
-                data.get("most_actives", {}).get("quotes", []),
-                include_volume=True
-            )
+        return {
+            "gainers": normalize_quotes(safe_quotes(data, "day_gainers")),
+            "losers": normalize_quotes(safe_quotes(data, "day_losers")),
+            "actives": normalize_quotes(safe_quotes(data, "most_actives"), include_volume=True),
         }
-        return response
     except Exception as e:
         print(f"Error fetching market movers: {e}")
         return {}
@@ -243,3 +235,7 @@ def normalize_quotes(quotes, include_volume=False):
             **({"volume": q["regularMarketVolume"]} if include_volume else {})
         })
     return items
+
+def safe_quotes(data: dict, key: str) -> list:
+    result = data.get(key, {})
+    return result.get("quotes", []) if isinstance(result, dict) else []
