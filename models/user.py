@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional, List
+
+if TYPE_CHECKING:
+    from models.portfolio import Portfolio
+    from models.watchlist import Watchlist
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from database import Base
-
 
 class User(Base):
     __tablename__ = "users"
@@ -31,6 +36,12 @@ class User(Base):
     )
 
     refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    portfolios: Mapped[List["Portfolio"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    watchlists: Mapped[List["Watchlist"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 

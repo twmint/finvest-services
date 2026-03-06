@@ -12,7 +12,6 @@ from sqlalchemy.sql import func
 
 from database import Base
 
-
 class InstrumentType(str, enum.Enum):
     STOCK = "stock"
     ETF = "etf"
@@ -20,8 +19,6 @@ class InstrumentType(str, enum.Enum):
 
 
 class Ticker(Base):
-    """Static metadata for a financial instrument. Rarely changes after initial seed."""
-
     __tablename__ = "tickers"
     __table_args__ = (
         Index("ix_tickers_instrument_type", "instrument_type"),
@@ -39,12 +36,10 @@ class Ticker(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD")
     country: Mapped[Optional[str]] = mapped_column(String(100))
 
-    # Stock-specific metadata
     sector: Mapped[Optional[str]] = mapped_column(String(100))
     industry: Mapped[Optional[str]] = mapped_column(String(100))
     ipo_date: Mapped[Optional[date]] = mapped_column(Date)
 
-    # Rich metadata
     description: Mapped[Optional[str]] = mapped_column(String(2000))
     website: Mapped[Optional[str]] = mapped_column(String(500))
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
@@ -58,7 +53,6 @@ class Ticker(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # One-to-one: latest cached market data
     snapshot: Mapped[Optional["TickerSnapshot"]] = relationship(
         back_populates="ticker", uselist=False, lazy="selectin"
     )
@@ -68,11 +62,6 @@ class Ticker(Base):
 
 
 class TickerSnapshot(Base):
-    """
-    Cached real-time market data fetched from yahooquery.
-    One row per ticker. Check `fetched_at` to decide if a refresh is needed.
-    """
-
     __tablename__ = "ticker_snapshots"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -80,7 +69,6 @@ class TickerSnapshot(Base):
         ForeignKey("tickers.id", ondelete="CASCADE"), unique=True, index=True
     )
 
-    # Price data
     price: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     open: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     previous_close: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
@@ -97,10 +85,8 @@ class TickerSnapshot(Base):
     avg_volume: Mapped[Optional[int]] = mapped_column(BigInteger)
     market_cap: Mapped[Optional[int]] = mapped_column(BigInteger)
 
-    # Ratios
     pe_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4))
 
-    # When this snapshot was last fetched — use this to decide if data is stale
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
