@@ -11,15 +11,14 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from database import Base
+from database import Base, TimestampMixin
 
-class User(Base):
+class User(TimestampMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
         Index("ix_users_email", "email"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(255))
 
@@ -27,13 +26,6 @@ class User(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
 
     refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

@@ -10,24 +10,17 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from database import Base
+from database import Base, TimestampMixin
 
-class Watchlist(Base):
+
+class Watchlist(TimestampMixin, Base):
     __tablename__ = "watchlists"
     __table_args__ = (
         Index("ix_watchlists_user_id", "user_id"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
 
     user: Mapped["User"] = relationship(back_populates="watchlists")
     items: Mapped[List["WatchlistItem"]] = relationship(

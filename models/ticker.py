@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import enum
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -10,7 +12,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from database import Base
+from database import Base, TimestampMixin
+
 
 class InstrumentType(str, enum.Enum):
     STOCK = "stock"
@@ -18,14 +21,13 @@ class InstrumentType(str, enum.Enum):
     FUND = "fund"
 
 
-class Ticker(Base):
+class Ticker(TimestampMixin, Base):
     __tablename__ = "tickers"
     __table_args__ = (
         Index("ix_tickers_instrument_type", "instrument_type"),
         Index("ix_tickers_sector", "sector"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     instrument_type: Mapped[InstrumentType] = mapped_column(
@@ -45,13 +47,6 @@ class Ticker(Base):
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
 
     snapshot: Mapped[Optional["TickerSnapshot"]] = relationship(
         back_populates="ticker", uselist=False, lazy="selectin"
@@ -80,7 +75,6 @@ class TickerSnapshot(Base):
     change: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     change_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 4))
 
-    # Volume & size: market cap of large caps exceeds Integer's ~2.1B max
     volume: Mapped[Optional[int]] = mapped_column(BigInteger)
     avg_volume: Mapped[Optional[int]] = mapped_column(BigInteger)
     market_cap: Mapped[Optional[int]] = mapped_column(BigInteger)
