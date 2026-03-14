@@ -20,7 +20,7 @@ class User(TimestampMixin, Base):
     )
 
     email: Mapped[str] = mapped_column(String(255), unique=True)
-    full_name: Mapped[Optional[str]] = mapped_column(String(255))
+    fullname: Mapped[Optional[str]] = mapped_column(String(255))
 
     hashed_password: Mapped[str] = mapped_column(String(255))
 

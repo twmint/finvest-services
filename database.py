@@ -90,5 +90,6 @@ async def get_db():
         except Exception as e:
             await session.rollback()
             logger.error(f"Database session error: {e}")
+            raise
         finally:
             await session.close()

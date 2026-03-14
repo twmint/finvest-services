@@ -7,8 +7,11 @@ from starlette.responses import Response
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from routers import auth
 from routers import stocks
 from routers import ai_analysis
+from routers import ticker
+from routers import orders
 from wsockets import stock_market as ws_stocks
 
 load_dotenv()
@@ -43,8 +46,11 @@ app.add_middleware(
 
 api_router = APIRouter(prefix="/api/v1")
 
+api_router.include_router(auth.router, prefix="/auth")
 api_router.include_router(stocks.router, prefix="/stocks")
 api_router.include_router(ai_analysis.router, prefix="/ai")
+api_router.include_router(ticker.router, prefix="/ticker")
+api_router.include_router(orders.router, prefix="/orders")
 
 ws_router = APIRouter()
 ws_router.include_router(ws_stocks.router)
