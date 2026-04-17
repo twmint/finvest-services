@@ -1,51 +1,46 @@
 from fastapi import APIRouter, Cookie, Depends, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models.user import RefreshToken, User
+from models.user import User
 from schemas.auth import AuthRequest, RegisterRequest, UserResponse
 from schemas.base import ProblemDetail
-from utils.security import change_refresh_token, create_access_token, create_refresh_token, hash_password, verify_password
+from services.auth_service import AuthService
+from utils.security import get_current_user
 
 router = APIRouter()
 
 
+@router.get("/me", status_code=status.HTTP_200_OK, response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return UserResponse.model_validate(current_user)
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(select(User).where(User.email == body.email))
-    if existing.scalar_one_or_none():
+    service = AuthService(db)
+    user = await service.register(body.email, body.fullname, body.password)
+    if not user:
         return ProblemDetail(title="Conflict", status=409, detail="Email already registered").to_response()
-
-    user = User(
-        email=body.email,
-        fullname=body.fullname,
-        hashed_password=hash_password(body.password),
-    )
-
-    db.add(user)
-    await db.commit()
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
 async def login(body: AuthRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == body.email))
-    user = result.scalar_one_or_none()
-
-    if not user or not verify_password(body.password, user.hashed_password):
+    service = AuthService(db)
+    result = await service.login(body.email, body.password)
+    if not result:
         return ProblemDetail(title="Unauthorized", status=401, detail="Invalid combination of email and password").to_response()
-    
-    access_token = create_access_token(user.id)
-    refresh_token = await create_refresh_token(user.id, db)
 
+    user, access_token, refresh_token = result
     response = JSONResponse(
         status_code=status.HTTP_200_OK,
         content=UserResponse.model_validate(user).model_dump(by_alias=True, mode="json"),
     )
-    response.set_cookie("access_token", access_token, httponly=True)
-    response.set_cookie("refresh_token", refresh_token, httponly=True)
+    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
+    response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="lax")
     return response
+
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
@@ -54,14 +49,8 @@ async def logout(
     db: AsyncSession = Depends(get_db),
 ):
     if refresh_token:
-        result = await db.execute(
-            select(RefreshToken).where(RefreshToken.token == refresh_token)
-        )
-        token_record = result.scalar_one_or_none()
-        if token_record and not token_record.revoked:
-            token_record.revoked = True
-            await db.commit()
-
+        service = AuthService(db)
+        await service.logout(refresh_token)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
 
@@ -74,17 +63,16 @@ async def refresh(
     if not refresh_token:
         return ProblemDetail(title="Unauthorized", status=401, detail="Refresh token missing").to_response()
 
-    result = await change_refresh_token(refresh_token, db)
+    service = AuthService(db)
+    result = await service.refresh(refresh_token)
     if not result:
         resp = ProblemDetail(title="Unauthorized", status=401, detail="Invalid or expired refresh token").to_response()
         resp.delete_cookie("access_token")
         resp.delete_cookie("refresh_token")
         return resp
 
-    new_refresh_token, user_id = result
-    new_access_token = create_access_token(user_id)
-
+    new_access, new_refresh = result
     resp = Response(status_code=status.HTTP_204_NO_CONTENT)
-    resp.set_cookie("access_token", new_access_token, httponly=True)
-    resp.set_cookie("refresh_token", new_refresh_token, httponly=True)
+    resp.set_cookie("access_token", new_access, httponly=True, samesite="lax")
+    resp.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax")
     return resp

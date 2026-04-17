@@ -1,9 +1,17 @@
-import uuid
-from fastapi import APIRouter
+from typing import Literal, Optional
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional, Literal
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from services.order_service import OrderService
 
 router = APIRouter()
+
+
+def order_service(db: AsyncSession = Depends(get_db)) -> OrderService:
+    return OrderService(db)
 
 
 class TradeOrderRequest(BaseModel):
@@ -28,18 +36,19 @@ class OrderConfirmation(BaseModel):
 
 
 @router.post("/", response_model=OrderConfirmation)
-def place_order(order: TradeOrderRequest):
-    """
-    Submit a trade order.
-    TODO: Add real order processing, validation, and brokerage integration.
-    Returns mock confirmation for now.
-    """
-    return OrderConfirmation(
-        order_id=str(uuid.uuid4()),
-        status="submitted",
-        ticker=order.ticker.upper(),
+def place_order(order: TradeOrderRequest, service: OrderService = Depends(order_service)):
+    result = service.place_order(
+        ticker=order.ticker,
         side=order.side,
         order_type=order.order_type,
         quantity=order.quantity,
-        estimated_total=0.0,  # TODO: calculate from real price
+    )
+    return OrderConfirmation(
+        order_id=result.order_id,
+        status=result.status,
+        ticker=result.ticker,
+        side=result.side,
+        order_type=result.order_type,
+        quantity=result.quantity,
+        estimated_total=result.estimated_total, # TODO: calculate from real price
     )

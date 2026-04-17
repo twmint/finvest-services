@@ -1,14 +1,20 @@
 import os
-from datetime import datetime, timedelta, timezone
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
-from jose import jwt
-from pwdlib import PasswordHash
+from fastapi import Cookie, Depends, HTTPException, status
 
+class InvalidSessionException(HTTPException):
+    def __init__(self, detail: str = "Session invalid"):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+from jose import JWTError, jwt
+from pwdlib import PasswordHash
 from sqlalchemy import insert, select
-from models.user import RefreshToken
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from models.user import RefreshToken, User
 
 load_dotenv()
 
@@ -63,3 +69,30 @@ async def change_refresh_token(old_token: str, db: AsyncSession) -> tuple[str, i
 
     new_token = await create_refresh_token(user_id, db)
     return new_token, user_id
+
+
+async def get_current_user(
+    access_token: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    if not access_token:
+        raise InvalidSessionException()
+
+    try:
+        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise InvalidSessionException()
+
+    if payload.get("type") != "access":
+        raise InvalidSessionException()
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise InvalidSessionException()
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise InvalidSessionException()
+
+    return user
