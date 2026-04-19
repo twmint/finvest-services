@@ -1,8 +1,6 @@
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from dotenv import load_dotenv
 from fastapi import Cookie, Depends, HTTPException, status
 
 class InvalidSessionException(HTTPException):
@@ -13,14 +11,13 @@ from pwdlib import PasswordHash
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from database import get_db
 from models.user import RefreshToken, User
 
-load_dotenv()
-
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+SECRET_KEY = settings.jwt_secret_key
+ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 pwd_hasher = PasswordHash.recommended()
 
@@ -40,7 +37,7 @@ def create_access_token(user_id: int) -> str:
         "sub": str(user_id),
         "iat": now,
         "exp": expire,
-        "iss": os.getenv("JWT_ISSUER"),
+        "iss": settings.jwt_issuer,
         "jti": str(uuid.uuid4()),
         "type": "access",
     }

@@ -1,5 +1,3 @@
-import os
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, APIRouter, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,13 +6,20 @@ from starlette.responses import Response
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from config import settings
 from routers import auth, stocks, ai_analysis, ticker, orders
 from utils.security import get_current_user, InvalidSessionException
 from wsockets import stock_market as ws_stocks
 
-load_dotenv()
+API_PREFIX = "/api/v1"
 
 limiter = Limiter(key_func=get_remote_address)
+
+_CACHEABLE_PREFIXES: dict[str, str] = {
+    f"{API_PREFIX}/stocks": "private, max-age=60",
+    f"{API_PREFIX}/ticker": "private, max-age=60",
+    f"{API_PREFIX}/ai/ai_insights": "private, max-age=300",
+}
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -26,6 +31,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' https:; script-src 'self'; style-src 'self' 'unsafe-inline'"
+        path = request.url.path
+        cache = next(
+            (v for k, v in _CACHEABLE_PREFIXES.items() if path.startswith(k)),
+            "no-store",
+        )
+        response.headers["Cache-Control"] = cache
         return response
 
 app = FastAPI()
@@ -44,7 +55,7 @@ async def invalid_session_handler(_request: Request, exc: InvalidSessionExceptio
 async def http_exception_handler(_request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")]
+origins = settings.cors_origins_list
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +65,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-api_router = APIRouter(prefix="/api/v1")
+api_router = APIRouter(prefix=API_PREFIX)
 
 protected = {"dependencies": [Depends(get_current_user)]}
 

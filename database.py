@@ -1,25 +1,21 @@
 import logging
-import os
 import time
 from datetime import datetime, timezone
 
-from dotenv import load_dotenv
 from sqlalchemy import DateTime, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 import psutil
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
+from config import settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.database_url,
     connect_args={"timeout": 15},
     future=True,
     poolclass=AsyncAdaptedQueuePool,
@@ -28,7 +24,7 @@ engine = create_async_engine(
     pool_recycle=3600,
     pool_pre_ping=True,
     max_overflow=0,
-    echo=os.getenv("DB_ECHO", "false") == "true",
+    echo=settings.db_echo,
 )
 
 AsyncSessionLocal = async_sessionmaker(

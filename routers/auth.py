@@ -2,6 +2,7 @@ from fastapi import APIRouter, Cookie, Depends, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from database import get_db
 from models.user import User
 from schemas.auth import AuthRequest, RegisterRequest, UserResponse
@@ -37,8 +38,8 @@ async def login(body: AuthRequest, db: AsyncSession = Depends(get_db)):
         status_code=status.HTTP_200_OK,
         content=UserResponse.model_validate(user).model_dump(by_alias=True, mode="json"),
     )
-    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
-    response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="lax")
+    response.set_cookie("access_token", access_token, httponly=True, samesite="lax", secure=settings.is_prod)
+    response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="lax", secure=settings.is_prod)
     return response
 
 
@@ -73,6 +74,6 @@ async def refresh(
 
     new_access, new_refresh = result
     resp = Response(status_code=status.HTTP_204_NO_CONTENT)
-    resp.set_cookie("access_token", new_access, httponly=True, samesite="lax")
-    resp.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax")
+    resp.set_cookie("access_token", new_access, httponly=True, samesite="lax", secure=settings.is_prod)
+    resp.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax", secure=settings.is_prod)
     return resp

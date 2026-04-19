@@ -1,16 +1,13 @@
-import os
-
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import settings
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 class AIService:
     def get_market_insights(self) -> str | None:
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = settings.groq_api_key
         if not api_key:
             return None
 
