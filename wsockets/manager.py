@@ -1,8 +1,8 @@
 import hmac
 import uuid
-from fastapi import WebSocket
-from typing import Dict, Optional
 
+from typing import Dict, Optional
+from fastapi import WebSocket
 from config import settings
 
 
@@ -21,6 +21,7 @@ class ConnectionManager:
         client_id = str(uuid.uuid4())
         self.active_connections[client_id] = {
             "websocket": websocket,
+            "authenticated": False,
         }
         return client_id
 

@@ -2,10 +2,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Cookie, Depends, HTTPException, status
-
-class InvalidSessionException(HTTPException):
-    def __init__(self, detail: str = "Session invalid"):
-        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 from jose import JWTError, jwt
 from pwdlib import PasswordHash
 from sqlalchemy import insert, select
@@ -18,9 +14,18 @@ from models.user import RefreshToken, User
 SECRET_KEY = settings.jwt_secret_key
 ALGORITHM = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+DEFAULT_SCOPES = [
+    "read:portfolio", "write:portfolio",
+    "read:orders", "write:orders",
+    "read:watchlist", "write:watchlist",
+    "read:market",
+]
 
 pwd_hasher = PasswordHash.recommended()
 
+class InvalidSessionException(HTTPException):
+    def __init__(self, detail: str = "Session invalid"):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 def hash_password(password: str) -> str:
     return pwd_hasher.hash(password)
@@ -30,16 +35,19 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_hasher.verify(plain, hashed)
 
 
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: int, scopes: list[str], role: str) -> str:
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": expire,
+        "nbf": now,
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "jti": str(uuid.uuid4()),
         "type": "access",
+        "scope": " ".join(scopes),
+        "roles": [role],
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -76,7 +84,14 @@ async def get_current_user(
         raise InvalidSessionException()
 
     try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+                access_token, 
+                SECRET_KEY, 
+                algorithms=[ALGORITHM],
+                issuer=settings.jwt_issuer,
+                audience=settings.jwt_audience,
+                options={"verify_nbf": True}
+            )
     except JWTError:
         raise InvalidSessionException()
 

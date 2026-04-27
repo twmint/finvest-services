@@ -14,9 +14,10 @@ class Settings(BaseSettings):
     db_echo: bool = False
 
     jwt_secret_key: str
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str
     jwt_issuer: str | None = None
-    access_token_expire_minutes: int = 15
+    jwt_audience: str
+    access_token_expire_minutes: int
 
     cors_origins: str = "http://localhost:3000"
 

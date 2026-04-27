@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import RefreshToken, User
-from utils.security import change_refresh_token, create_access_token, create_refresh_token, hash_password, verify_password
+from utils.security import DEFAULT_SCOPES, change_refresh_token, create_access_token, create_refresh_token, hash_password, verify_password
 
 
 class AuthService:
@@ -24,7 +24,7 @@ class AuthService:
         user = result.scalar_one_or_none()
         if not user or not verify_password(password, user.hashed_password):
             return None
-        access_token = create_access_token(user.id)
+        access_token = create_access_token(user.id, DEFAULT_SCOPES, user.role.value)
         refresh_token = await create_refresh_token(user.id, self.db)
         return user, access_token, refresh_token
 
@@ -42,5 +42,7 @@ class AuthService:
         if not result:
             return None
         new_refresh, user_id = result
-        new_access = create_access_token(user_id)
+        user_result = await self.db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one()
+        new_access = create_access_token(user_id, DEFAULT_SCOPES, user.role.value)
         return new_access, new_refresh
