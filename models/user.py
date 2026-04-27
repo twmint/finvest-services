@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime
+import enum
 from typing import TYPE_CHECKING, Optional, List
 
 if TYPE_CHECKING:
     from models.portfolio import Portfolio
     from models.watchlist import Watchlist
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from database import Base, TimestampMixin
+
+class Role(str, enum.Enum):
+    user = "user"
+    admin = "admin"
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
@@ -23,6 +28,10 @@ class User(TimestampMixin, Base):
     fullname: Mapped[Optional[str]] = mapped_column(String(255))
 
     hashed_password: Mapped[str] = mapped_column(String(255))
+
+    role: Mapped[Role] = mapped_column(
+        SQLAlchemyEnum(Role), default=Role.user, server_default="user", nullable=False
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
