@@ -48,7 +48,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def invalid_session_handler(_request: Request, exc: InvalidSessionException):
     response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
     return response
 
 @app.exception_handler(HTTPException)

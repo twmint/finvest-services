@@ -19,7 +19,6 @@ class StockService:
 
             quote_type = (price_data.get("quoteType") or "EQUITY").upper()
             instrument_type = _QUOTE_TYPE_MAP.get(quote_type, "stock")
-
             pe = summary.get("trailingPE")
 
             return {
@@ -35,7 +34,7 @@ class StockService:
                 "fiftyTwoWeekHigh": round(summary.get("fiftyTwoWeekHigh") or 0.0, 2),
                 "fiftyTwoWeekLow": round(summary.get("fiftyTwoWeekLow") or 0.0, 2),
                 "volume": int(price_data.get("regularMarketVolume") or 0),
-                "avgVolume": int(price_data.get("averageDailyVolume3Month") or 0),
+                "avgVolume": int(summary.get("averageVolume") or 0),
                 "marketCap": int(price_data.get("marketCap") or 0),
                 "peRatio": round(pe, 2) if pe is not None else None,
                 "instrumentType": instrument_type,
