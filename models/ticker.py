@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import enum
-from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-
+from datetime import date, datetime
+from models.enums import InstrumentType
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime,
     Enum as SAEnum, ForeignKey, Index, Numeric, String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-
 from database import Base, TimestampMixin
-
-
-class InstrumentType(str, enum.Enum):
-    STOCK = "stock"
-    ETF = "etf"
-    FUND = "fund"
 
 
 class Ticker(TimestampMixin, Base):
