@@ -7,7 +7,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from config import settings
-from routers import auth, stocks, ai_analysis, ticker, orders
+from events.registry import register_event_handlers
+from routers import account, auth, stocks, ai_analysis, ticker, orders
 from utils.security import get_current_user, InvalidSessionException
 from wsockets import stock_market as ws_stocks
 
@@ -42,17 +43,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-@app.exception_handler(InvalidSessionException)
-async def invalid_session_handler(_request: Request, exc: InvalidSessionException):
-    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    response.delete_cookie("access_token")
-    return response
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(_request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+register_event_handlers()
 
 origins = settings.cors_origins_list
 app.add_middleware(SecurityHeadersMiddleware)
@@ -64,6 +55,16 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+@app.exception_handler(InvalidSessionException)
+async def invalid_session_handler(_request: Request, exc: InvalidSessionException):
+    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    response.delete_cookie("access_token")
+    return response
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 api_router = APIRouter(prefix=API_PREFIX)
 
 protected = {"dependencies": [Depends(get_current_user)]}
@@ -73,6 +74,7 @@ api_router.include_router(stocks.router, prefix="/stocks", **protected)
 api_router.include_router(ai_analysis.router, prefix="/ai", **protected)
 api_router.include_router(ticker.router, prefix="/ticker", **protected)
 api_router.include_router(orders.router, prefix="/orders", **protected)
+api_router.include_router(account.router, prefix="/account", **protected)
 
 ws_router = APIRouter()
 ws_router.include_router(ws_stocks.router)

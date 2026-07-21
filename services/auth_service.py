@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from events.bus import event_bus
+from events.types import UserRegistered
 from models.user import RefreshToken, User
 from utils.security import DEFAULT_SCOPES, change_refresh_token, create_access_token, create_refresh_token, hash_password, verify_password
 
@@ -15,8 +17,8 @@ class AuthService:
             return None
         user = User(email=email, fullname=fullname, hashed_password=hash_password(password))
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        await self.db.flush()
+        await event_bus.publish(UserRegistered(user_id=user.id), self.db)
         return user
 
     async def login(self, email: str, password: str) -> tuple[User, str, str] | None:
@@ -35,7 +37,6 @@ class AuthService:
         token_record = result.scalar_one_or_none()
         if token_record and not token_record.revoked:
             token_record.revoked = True
-            await self.db.commit()
 
     async def refresh(self, old_token: str) -> tuple[str, str] | None:
         result = await change_refresh_token(old_token, self.db)

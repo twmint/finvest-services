@@ -4,7 +4,10 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.enums import OrderSide, OrderStatus, OrderType, TimeInForce
+from events.types import OrderPlaced
+from events.bus import event_bus
+from models.ledger import CashAccount, CashLedger
+from models.enums import BalanceStatus, LedgerType, OrderSide, OrderStatus, OrderType, TimeInForce
 from models.trade import TradeOrder
 from models.holding import Holding, OrderExecution
 from schemas.trade import TradeOrderRequest
@@ -19,8 +22,8 @@ class OrderResult:
         ticker: str,
         side: str,
         order_type: str,
-        quantity: float,
-        estimated_total: float,
+        quantity: Decimal,
+        estimated_total: Decimal,
     ):
         self.order_id = order_id
         self.status = status
@@ -43,11 +46,13 @@ class OrderService:
     ) -> OrderResult | None:
         ticker = order.ticker.upper()
         ticker_detail = self.stock_service.get_ticker_detail(ticker)
+        
         if ticker_detail is None:
             return None
-        ticker_price = ticker_detail.get("price")
-        if not ticker_price:
+        ticker_price_raw = ticker_detail.get("price")
+        if not ticker_price_raw:
             return None
+        ticker_price = Decimal(str(ticker_price_raw))
 
         if order.order_type in ("limit", "stop_limit") and order.limit_price is None:
             return None
@@ -55,7 +60,7 @@ class OrderService:
             return None
 
         to_fill = False
-        execution_price: float | None = None
+        execution_price: Decimal | None = None
 
         if order.order_type == "market":
             to_fill = True
@@ -73,11 +78,16 @@ class OrderService:
         else:
             return None
 
-        quantity = Decimal(str(order.quantity))
+        quantity = order.quantity
         reference_price = execution_price if execution_price is not None else (order.limit_price or order.stop_price)
-        total = quantity * Decimal(str(reference_price))
+        total = quantity * reference_price
         if total <= 0:
             return None
+        
+        if order.side == OrderSide.BUY:
+            balance_status = await self.check_buying_power(user_id, total)
+            if balance_status != BalanceStatus.OK:
+                return None
 
         trade_order = TradeOrder(
             user_id=user_id,
@@ -86,8 +96,8 @@ class OrderService:
             order_type=OrderType(order.order_type),
             status=OrderStatus.PENDING,
             quantity=quantity,
-            limit_price=Decimal(str(order.limit_price)) if order.limit_price is not None else None,
-            stop_price=Decimal(str(order.stop_price)) if order.stop_price is not None else None,
+            limit_price=order.limit_price,
+            stop_price=order.stop_price,
             fees=Decimal("0.00"),
             total_value=total,
             time_in_force=TimeInForce(order.time_in_force),
@@ -104,17 +114,16 @@ class OrderService:
                 side=order.side,
                 order_type=order.order_type,
                 quantity=order.quantity,
-                estimated_total=float(total),
+                estimated_total=total,
             )
 
-        execution_price_decimal = Decimal(str(execution_price))
         order_execution = OrderExecution(
             order_id=trade_order.id,
             symbol=ticker,
             side=OrderSide(order.side),
             quantity=quantity,
-            price=execution_price_decimal,
-            total=quantity * execution_price_decimal,
+            price=execution_price,
+            total=quantity * execution_price,
         )
         self.db.add(order_execution)
         await self.db.flush()
@@ -122,7 +131,15 @@ class OrderService:
         await self.process_execution_fill(user_id, order_execution)
         trade_order.status = OrderStatus.FILLED
         trade_order.filled_quantity = quantity
-        trade_order.average_fill_price = execution_price_decimal
+        trade_order.average_fill_price = execution_price
+
+        await event_bus.publish(OrderPlaced(
+            user_id=user_id,
+            order_id=trade_order.id,
+            ledger_type=LedgerType.ORDER_SETTLE,
+            quantity=quantity,
+            amount=total if order.side == OrderSide.BUY else -total,
+        ), self.db)
 
         return OrderResult(
             order_id=str(trade_order.id),
@@ -131,9 +148,21 @@ class OrderService:
             side=order.side,
             order_type=order.order_type,
             quantity=order.quantity,
-            estimated_total=float(total),
+            estimated_total=total,
         )
+    
+    async def check_buying_power(self, user_id: int, total_cost: Decimal) -> BalanceStatus:
+        result = await self.db.execute(
+            select(CashAccount).filter_by(user_id=user_id).with_for_update()
+        )
+        user_balance = result.scalar_one_or_none()
 
+        if not user_balance:
+            return BalanceStatus.NOT_FOUND
+        if user_balance.buying_power < total_cost:
+            return BalanceStatus.INSUFFICIENT_FUNDS
+        return BalanceStatus.OK
+    
     async def process_execution_fill(self, user_id: int, execution: OrderExecution) -> None:
         result = await self.db.execute(
             select(Holding)
@@ -161,7 +190,7 @@ class OrderService:
 
         await self.db.flush()
 
-    def check_condition(self, side: str, price: float, current_price: float, check_type: Literal["limit", "stop"]) -> bool:
+    def check_condition(self, side: str, price: Decimal, current_price: Decimal, check_type: Literal["limit", "stop"]) -> bool:
         if check_type == "limit":
             return current_price <= price if side == "buy" else current_price >= price
         elif check_type == "stop":

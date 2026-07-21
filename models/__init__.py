@@ -20,8 +20,8 @@ from models.holding import (
 )
 
 from models.ledger import (
+    CashAccount,
     CashLedger,
-    UserBalance,
 )
 
 from models.watchlist import (
@@ -42,7 +42,7 @@ __all__ = [
     "Holding",
 
     "CashLedger",
-    "UserBalance",
+    "CashAccount",
 
     "Watchlist",
     "WatchlistItem",

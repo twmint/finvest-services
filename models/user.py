@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional, List
 
 if TYPE_CHECKING:
-    from models.ledger import UserBalance
+    from models.ledger import CashAccount
     from models.holding import Holding
     from models.watchlist import Watchlist
 
@@ -40,8 +40,8 @@ class User(TimestampMixin, Base):
         back_populates="user", cascade="all, delete-orphan"
     )
 
-    balances: Mapped[list["UserBalance"]] = relationship(
-        "UserBalance", back_populates="user", cascade="all, delete-orphan"
+    balance: Mapped["CashAccount"] = relationship(
+        "CashAccount", back_populates="user", cascade="all, delete-orphan", uselist=False
     )
 
     holdings: Mapped[list["Holding"]] = relationship(

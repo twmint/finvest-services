@@ -35,3 +35,8 @@ class TimeInForce(str, enum.Enum):
     DAY = "day"
     GTC = "gtc"
     IOC = "ioc"
+
+class BalanceStatus(str, enum.Enum):
+    OK = "ok"
+    NOT_FOUND = "not_found"
+    INSUFFICIENT_FUNDS = "insufficient_funds"

@@ -56,7 +56,6 @@ async def create_refresh_token(user_id: int, db: AsyncSession) -> str:
     now = datetime.now(timezone.utc)
     expire = now + timedelta(days=7)
     await db.execute(insert(RefreshToken).values(user_id=user_id, token=token, expires_at=expire))
-    await db.commit()
     return token
 
 async def change_refresh_token(old_token: str, db: AsyncSession) -> tuple[str, int] | None:
@@ -70,7 +69,6 @@ async def change_refresh_token(old_token: str, db: AsyncSession) -> tuple[str, i
 
     user_id = refresh_token.user_id
     refresh_token.revoked = True
-    await db.commit()
 
     new_token = await create_refresh_token(user_id, db)
     return new_token, user_id
