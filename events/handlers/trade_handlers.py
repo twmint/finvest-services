@@ -14,9 +14,19 @@ async def create_ledger_entry(event: OrderPlaced, db: AsyncSession) -> None:
     user_balance = result.scalar_one_or_none()
     if user_balance:
         user_balance.cash_balance -= event.amount
+        user_balance.locked_cash -= event.amount
 
     db.add(CashLedger(user_id=event.user_id, order_id=event.order_id, type=event.ledger_type, amount=event.amount))
     await db.flush()
+
+async def update_cash_account(event: OrderSubmitted, db: AsyncSession) -> None:
+    result = await db.execute(
+        select(CashAccount).filter_by(user_id=event.user_id).with_for_update()
+    )
+    user_balance = result.scalar_one_or_none()
+    if user_balance:
+        user_balance.locked_cash += event.amount
+        await db.flush()
 
 async def attempt_fill(event: OrderSubmitted, db: AsyncSession) -> None:
     result = await db.execute(
