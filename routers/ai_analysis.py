@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from schemas.base import ProblemDetail
+from schemas.errors import ProblemDetail
 from services.ai_service import AIService
 
 router = APIRouter()

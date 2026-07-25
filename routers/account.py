@@ -5,7 +5,7 @@ from database import get_db
 from models.enums import BalanceStatus
 from models.user import User
 from schemas.account import AccountResponse, DepositRequest, WithdrawRequest
-from schemas.base import ProblemDetail
+from schemas.errors import ProblemDetail
 from services.account_service import AccountService
 from utils.security import get_current_user
 

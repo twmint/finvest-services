@@ -6,7 +6,7 @@ from config import settings
 from database import get_db
 from models.user import User
 from schemas.auth import AuthRequest, RegisterRequest, UserResponse
-from schemas.base import ProblemDetail
+from schemas.errors import ProblemDetail
 from services.auth_service import AuthService
 from utils.security import get_current_user
 

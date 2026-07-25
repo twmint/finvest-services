@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from schemas.base import ProblemDetail
+from schemas.errors import ProblemDetail
 from services.stock_service import StockService
 
 router = APIRouter()
