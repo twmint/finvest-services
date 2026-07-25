@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from utils.security import get_current_user
 from models.user import User
-from schemas.base import ProblemDetail
-from schemas.trade import TradeOrderRequest, OrderConfirmation
+from schemas.errors import ProblemDetail
+from schemas.trade import ConfirmedOrder, TradeOrderRequest
 from services.order_service import OrderService
 from services.stock_service import StockService
 
@@ -19,26 +19,18 @@ def order_service(
     return OrderService(db, stock_service)
 
 
-@router.post("/", response_model=OrderConfirmation)
+@router.post("/", response_model=ConfirmedOrder)
 async def place_order(
     order: TradeOrderRequest,
     user: User = Depends(get_current_user),
     service: OrderService = Depends(order_service),
 ):
     result = await service.place_order(user_id=user.id, order=order)
-    if result is None:
+    if not result.ok:
         return ProblemDetail(
             title="Unprocessable Entity",
             status=422,
-            detail=f"Could not place order for '{order.ticker}'",
+            detail=f"Could not place order for '{order.ticker}', reason: {result.error.value}",
         ).to_response()
 
-    return OrderConfirmation(
-        order_id=result.order_id,
-        status=result.status,
-        ticker=result.ticker,
-        side=result.side,
-        order_type=result.order_type,
-        quantity=result.quantity,
-        estimated_total=result.estimated_total,
-    )
+    return result.value
