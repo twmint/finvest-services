@@ -13,3 +13,9 @@ class OrderPlaced:
     ledger_type: str
     quantity: Decimal
     amount: Decimal
+
+@dataclass(frozen=True)
+class OrderSubmitted:
+    order_id: int
+    user_id: int
+    amount: Decimal
